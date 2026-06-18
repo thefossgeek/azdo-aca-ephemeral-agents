@@ -1,5 +1,5 @@
 # ============================================================================
-# Common variables (location, environment, product, location_code, tenant_id,
+# Common variables (location, environment, location_code, tenant_id,
 # tags, subscription_id) are declared by the Terragrunt-generated globals.tf
 # and must NOT be re-declared here.
 # ============================================================================

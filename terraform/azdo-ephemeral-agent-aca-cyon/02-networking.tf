@@ -8,7 +8,7 @@ module "vnet" {
   resource_group_name     = module.resource_group.name
   location                = var.location
   environment             = var.environment
-  product                 = var.product
+  project                 = var.project
   location_code           = var.location_code
   instance                = var.instance
   tags                    = var.tags
