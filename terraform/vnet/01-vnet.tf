@@ -2,7 +2,7 @@
 # Internal Naming Module
 # ============================================================================
 locals {
-  vnet_name = "vnet-${var.workload}-${var.product}-${var.environment}-${var.location_code}-${var.instance}"
+  vnet_name = "vnet-${var.workload}-${var.project}-${var.environment}-${var.location_code}-${var.instance}"
 }
 
 # ============================================================================

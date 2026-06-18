@@ -12,9 +12,9 @@ variable "environment" {
   description = "Environment name used in resource naming (e.g. dev, staging, prod)."
 }
 
-variable "product" {
+variable "project" {
   type        = string
-  description = "Product code used in resource naming."
+  description = "Project code used in resource naming."
 }
 
 variable "location_code" {
