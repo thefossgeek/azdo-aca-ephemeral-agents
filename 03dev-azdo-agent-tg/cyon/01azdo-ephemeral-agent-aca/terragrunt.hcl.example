@@ -1,0 +1,131 @@
+# ============================================================================
+# Includes
+#
+# root.hcl   — provides shared inputs: location, environment, project,
+#              location_code, tenant_id, subscription_id, tags
+# common.hcl — generates: versions.tf, globals.tf, providers.tf (azurerm),
+#              backend.tf (azurerm remote state), extra Terraform arguments
+# ============================================================================
+
+include "root" {
+  path           = find_in_parent_folders("root.hcl")
+  merge_strategy = "deep"
+  expose         = true   # required to access include.root.inputs.* in locals
+}
+
+include "common" {
+  path           = find_in_parent_folders("common.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+# ============================================================================
+# Terraform Source
+# ============================================================================
+
+terraform {
+  source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-aca"
+}
+
+# ============================================================================
+# Locals — derived from root.hcl inputs so names are always consistent with
+# the environment config; no hardcoding of region/env/project strings here.
+# ============================================================================
+
+locals {
+  location_code     = include.root.inputs.location_code   # e.g. "uaen"
+  project           = include.root.inputs.project          # e.g. "spai"
+  environment       = include.root.inputs.environment      # e.g. "prod"
+  instance          = "001"
+  infra_subnet_name = "snet-devopsagent-aca"
+
+  # Shared name segment reused across all resource names in this deployment.
+  name_prefix = "${local.project}-${local.environment}-${local.location_code}-${local.instance}"
+}
+
+# ============================================================================
+# Inputs
+#
+# The following are inherited automatically via the includes above and do NOT
+# need to be repeated here:
+#   location, environment, project, location_code, tenant_id, tags  (root.hcl)
+#   subscription_id                                                  (root.hcl)
+#
+# Only module-specific inputs are declared below.
+# ============================================================================
+
+inputs = {
+
+  # ── Naming ────────────────────────────────────────────────────────────────
+  instance = local.instance
+
+  # ── Resource Group ────────────────────────────────────────────────────────
+  resource_group_name = "rg-${local.location_code}-${local.project}-${local.environment}-eph-agent-${local.instance}"
+  enable_rg_lock      = false
+
+  # ── Virtual Network ───────────────────────────────────────────────────────
+  # The infra subnet must be delegated to Microsoft.App/environments and
+  # sized at least /23 (512 addresses) to meet ACA environment requirements.
+  workload      = "eph-agent"
+  address_space = ["10.100.0.0/16"]
+  subnets = [
+    {
+      name             = local.infra_subnet_name
+      address_prefixes = ["10.100.0.0/23"]
+      delegation = {
+        name         = "aca-delegation"
+        service_name = "Microsoft.App/environments"
+        actions      = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
+      }
+    }
+  ]
+  infra_subnet_name = local.infra_subnet_name
+  enable_vnet_lock  = false
+
+  # ── UDR — Hub Firewall Routing (FortiGate) ────────────────────────────────
+  # Disabled by default for testing. For production, set enable_udr = true
+  # and provide the FortiGate private IP in the hub VNet.
+  #
+  # To enable:
+  #   enable_udr      = true
+  #   hub_firewall_ip = "10.0.0.4"   # FortiGate internal/trust interface IP
+  #
+  # udr_subnet_names scopes the route table association to the agent subnet only
+  # (best practice — avoids disrupting private endpoints or other subnets).
+  enable_udr       = false
+  hub_firewall_ip  = null
+  udr_subnet_names = [local.infra_subnet_name]
+
+  # ── AzDO Access ───────────────────────────────────────────────────────────
+  ado_project_name = "${local.project}-${local.environment}-azure-infra"
+  agent_pool_name  = "pool-eph-agent-${local.environment}"
+  uami_name        = "id-eph-agent-${local.name_prefix}"
+  # Grant the UAMI at minimum AcrPull on the registry hosting the agent image.
+  role_assignments = [
+    {
+      scope = "provide acr"
+      role  = "AcrPull"
+    }
+  ]
+
+  # ── Container App Environment ─────────────────────────────────────────────
+  project    = local.project
+  create_law = true
+  # existing_law_id = "/subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/..."
+
+  # ── Container App Job (Ephemeral Agent) ───────────────────────────────────
+  agent_type   = "alpine"
+  acr_server   = "xxxxxxx.azurecr.io"
+  agent_image  = "xxxxxxx.azurecr.io/azp-agent/alpine:20260618-7b5b5dee"
+  azdo_org_url = "https://dev.azure.com/xxxxxxxxxxx"
+
+  # PAT for KEDA queue polling — set via environment variable, never hardcode.
+  # Required scope: Agent Pools (Read)
+  # Usage: export TF_VAR_AZDO_KEDA_PAT=<your-pat>
+  azdo_keda_pat = get_env("TF_VAR_AZDO_KEDA_PAT")
+
+  cpu                        = "0.5"
+  memory                     = "1Gi"
+  max_executions             = 10
+  replica_timeout_in_seconds = 1800
+}

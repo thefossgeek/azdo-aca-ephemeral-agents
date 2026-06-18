@@ -1,0 +1,34 @@
+locals {
+
+  vars                            = read_terragrunt_config(find_in_parent_folders("vars.hcl"))
+  tfbackend_state_storage_account = "01uaenspaidevtfstate"
+  tfbackend_container_name        = "azdo-aca-ephemeral-agents"
+  tfbackend_subscription_id       = local.vars.inputs.spai_dev
+  tfbackend_resource_group        = "rg-uaen-spai-dev-tfstate"
+  tfbackend_location              = "uaenorth"
+
+  environment     = "dev"
+  location        = "uaenorth"
+  location_code   = "uaen"
+  project         = "spai"
+  tenant_id       = local.vars.inputs.tenant_id
+  subscription_id = local.vars.inputs.spai_dev
+
+}
+
+inputs = {
+
+  subscription_id = local.subscription_id
+  tenant_id       = local.tenant_id
+  location        = local.location
+  location_code   = local.location_code
+  environment     = local.environment
+  project         = local.project
+
+  tags = merge(local.vars.locals.tags, {
+    environment = local.environment,
+    project     = local.project
+    costcenter  = "cs01"
+  })
+
+}
