@@ -1,0 +1,16 @@
+locals {
+  tf_contrib_group_id    = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # Entra ID entra-sg-spai-prod-tfstate-backend-access
+
+  tags = {
+    owner      = "mohan"
+    department = "infra"
+    terraform  = "True"
+    repository = "azdo-aca-ephemeral-agents"
+  }
+
+}
+
+inputs = {
+  tenant_id         = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # Azure Tenant ID
+  spai_prod         = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # Subscription ID
+}
