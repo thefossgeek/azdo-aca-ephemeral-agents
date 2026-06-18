@@ -139,10 +139,6 @@ variable "tags" {
   type = map(string)
 }
 
-variable "product" {
-  type = string
-}
-
 EOF
 }
 
