@@ -1,0 +1,6 @@
+{
+  "subscription": "xxxxxxxxxxxxxxxxxxxxxxx",
+  "location": "uaenorth",
+  "deployment_name": "dep-uaen-spai-tfstate",
+  "template_file": "bicep/main-sa.bicep"
+}
