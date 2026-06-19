@@ -29,6 +29,12 @@ variable "enable_rg_lock" {
   default     = false
 }
 
+variable "create_resource_group" {
+  description = "Set to false when the resource group already exists and should only be looked up, not created."
+  type        = bool
+  default     = true
+}
+
 # ============================================================================
 # Virtual Network — existing (looked up via data source, not created)
 # ============================================================================

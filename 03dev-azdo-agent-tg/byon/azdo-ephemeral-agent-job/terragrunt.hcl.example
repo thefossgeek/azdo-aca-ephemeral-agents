@@ -1,0 +1,86 @@
+include "root" {
+  path           = find_in_parent_folders("root.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+include "common" {
+  path           = find_in_parent_folders("common.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+# Override common.hcl's globals.tf to exclude location/environment/tenant_id —
+# those are already declared in the module's own 00-variables.tf so that the
+# module can also be called as a child module by azdo-ephemeral-agent-aca-*.
+generate "globals" {
+  path              = "globals.tf"
+  if_exists         = "overwrite"
+  disable_signature = true
+  contents          = <<EOF
+variable "subscription_id" {
+  type = string
+}
+
+variable "location_code" {
+  type = string
+}
+
+variable "tags" {
+  type = map(string)
+}
+EOF
+}
+
+terraform {
+  source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-job"
+}
+
+dependency "infra" {
+  config_path = "../azdo-ephemeral-agent-aca-byon"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = {
+    resource_group_name = "rg-mock"
+    cae_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.App/managedEnvironments/cae-mock"
+    uami_id             = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-mock"
+    uami_client_id      = "00000000-0000-0000-0000-000000000000"
+    agent_pool_name     = "pool-mock"
+    agent_pool_id       = "1"
+  }
+}
+
+locals {
+  location_code = include.root.inputs.location_code
+  project       = include.root.inputs.project
+  environment   = include.root.inputs.environment
+  instance      = "001"
+}
+
+inputs = {
+
+  # ── Shared infra (from dependency) ────────────────────────────────────────
+  resource_group_name = dependency.infra.outputs.resource_group_name
+  cae_id              = dependency.infra.outputs.cae_id
+  uami_id             = dependency.infra.outputs.uami_id
+  uami_client_id      = dependency.infra.outputs.uami_client_id
+  azdo_pool_name      = dependency.infra.outputs.agent_pool_name
+  azdo_pool_id        = tostring(dependency.infra.outputs.agent_pool_id)
+
+  # ── Job-specific ──────────────────────────────────────────────────────────
+  project     = local.project
+  instance    = local.instance
+  agent_type  = "ubuntu24"   # change per job (becomes job name + AZP_AGENT_NAME_PREFIX)
+  keda_parent = "caj-<project>-<env>-ubuntu24-001-ph"
+
+  acr_server   = "xxxxxxxxx.azurecr.io"
+  agent_image  = "xxxxxxxxx.azurecr.io/azp-agent/ubuntu24:<IMAGE-TAG>"
+  azdo_org_url = "https://dev.azure.com/xxxxxxxxxx"
+
+  azdo_keda_pat = get_env("TF_VAR_AZDO_KEDA_PAT")
+
+  cpu                        = "0.5"
+  memory                     = "1Gi"
+  max_executions             = 5
+  replica_timeout_in_seconds = 1800
+}

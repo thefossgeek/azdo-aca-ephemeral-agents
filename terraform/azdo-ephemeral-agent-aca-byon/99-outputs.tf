@@ -4,12 +4,12 @@
 
 output "resource_group_name" {
   description = "Name of the deployed resource group."
-  value       = module.resource_group.name
+  value       = local.rg.name
 }
 
 output "resource_group_id" {
   description = "Resource ID of the deployed resource group."
-  value       = module.resource_group.id
+  value       = local.rg.id
 }
 
 # ============================================================================

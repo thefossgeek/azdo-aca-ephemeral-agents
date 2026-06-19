@@ -274,3 +274,42 @@ terragrunt apply
 ## Done
 
 Run a pipeline that targets the agent pool. Each job with `demands: agent_type -equals alpine` triggers the alpine scaler; `demands: agent_type -equals ubuntu24` triggers the ubuntu24 scaler. KEDA spins up exactly one ephemeral container per queued job and tears it down when complete.
+
+---
+
+## Test Pipeline
+
+Add the following as `azure-pipelines.yml` in your Azure DevOps repository to verify both agent types are working:
+
+```yaml
+trigger: none
+
+jobs:
+
+- job: RunOnAlpineAgent
+  displayName: 'Run on Alpine Agent'
+  pool:
+    name: 'pool-eph-agent-dev'
+    demands: agent_type -equals alpine
+
+  steps:
+  - script: |
+      echo "=== Alpine Agent ==="
+      echo "Running on Agent: $(Agent.Name)"
+    displayName: 'Print Agent Details'
+
+
+- job: RunOnUbuntu24Agent
+  displayName: 'Run on Ubuntu24 Agent'
+  pool:
+    name: 'pool-eph-agent-dev'
+    demands: agent_type -equals ubuntu24
+
+  steps:
+  - script: |
+      echo "=== Ubuntu24 Agent ==="
+      echo "Running on Agent: $(Agent.Name)"
+    displayName: 'Print Agent Details'
+```
+
+Run the pipeline manually from Azure DevOps. Each job should spin up its own ephemeral container, print the agent name, and terminate. Check the agent pool in Azure DevOps — you should see one `alpine` and one `ubuntu24` agent appear briefly while the jobs run, then go offline.

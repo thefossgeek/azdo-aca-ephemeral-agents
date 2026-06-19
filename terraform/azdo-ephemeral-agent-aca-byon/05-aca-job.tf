@@ -6,7 +6,7 @@ module "aca_job" {
   source = "../azdo-ephemeral-agent-job"
 
   project                    = var.project
-  resource_group_name        = module.resource_group.name
+  resource_group_name        = local.rg.name
   location                   = var.location
   environment                = var.environment
   tenant_id                  = var.tenant_id
