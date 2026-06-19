@@ -1,0 +1,118 @@
+# ============================================================================
+# Includes
+# ============================================================================
+
+include "root" {
+  path           = find_in_parent_folders("root.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+include "common" {
+  path           = find_in_parent_folders("common.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+# ============================================================================
+# Terraform Source
+# Points directly at the single-job module — no VNet, RG, or ACA env here.
+# ============================================================================
+
+# Override common.hcl's globals.tf to exclude location/environment/tenant_id —
+# those are already declared in the module's own 00-variables.tf so that the
+# module can also be called as a child module by azdo-ephemeral-agent-aca-*.
+generate "globals" {
+  path      = "globals.tf"
+  if_exists = "overwrite"
+  disable_signature = true
+  contents  = <<EOF
+variable "subscription_id" {
+  type = string
+}
+
+variable "location_code" {
+  type = string
+}
+
+variable "tags" {
+  type = map(string)
+}
+EOF
+}
+
+terraform {
+  source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-job"
+}
+
+# ============================================================================
+# Dependency — shared infrastructure deployed by azdo-ephemeral-agent-aca
+# All infra outputs (CAE, UAMI, pool, RG) are read from that state file.
+# ============================================================================
+
+dependency "infra" {
+  config_path = "../01azdo-ephemeral-agent-aca"
+
+  # Mock outputs allow `terragrunt plan` to work before the infra is applied.
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = {
+    resource_group_name = "rg-mock"
+    cae_id              = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.App/managedEnvironments/cae-mock"
+    uami_id             = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-mock"
+    uami_client_id      = "00000000-0000-0000-0000-000000000000"
+    agent_pool_name     = "pool-mock"
+    agent_pool_id       = "1"
+  }
+}
+
+# ============================================================================
+# Locals
+# ============================================================================
+
+locals {
+  location_code = include.root.inputs.location_code
+  project       = include.root.inputs.project
+  environment   = include.root.inputs.environment
+  instance      = "001"
+}
+
+# ============================================================================
+# Inputs
+#
+# location, environment, project, location_code, tenant_id, tags,
+# subscription_id are inherited from root.hcl via the include above.
+#
+# Shared infra (RG, CAE, UAMI, pool) comes from the dependency outputs.
+# Only job-specific values are declared here.
+# ============================================================================
+
+inputs = {
+
+  # ── Shared infra (from dependency) ────────────────────────────────────────
+  resource_group_name = dependency.infra.outputs.resource_group_name
+  cae_id              = dependency.infra.outputs.cae_id
+  uami_id             = dependency.infra.outputs.uami_id
+  uami_client_id      = dependency.infra.outputs.uami_client_id
+  azdo_pool_name      = dependency.infra.outputs.agent_pool_name
+  azdo_pool_id        = tostring(dependency.infra.outputs.agent_pool_id)
+
+  # ── Job-specific ──────────────────────────────────────────────────────────
+  project    = local.project
+  instance   = local.instance
+  agent_type  = "devops"   # change per job (becomes job name + AZP_AGENT_NAME_PREFIX)
+  keda_parent = "caj-spai-dev-devops-001-ph"
+
+  acr_server   = "xxxxxxxxx.azurecr.io"
+  agent_image  = "xxxxxxxxxx.azurecr.io/azp-agent:devops"
+  azdo_org_url = "https://dev.azure.com/xxxxxxxx"
+
+  # PAT for KEDA queue polling — set via environment variable, never hardcode.
+  # Required scope: Agent Pools (Read)
+  # Usage: export TF_VAR_AZDO_KEDA_PAT=<your-pat>
+  azdo_keda_pat = get_env("TF_VAR_AZDO_KEDA_PAT")
+
+  cpu                        = "0.5"
+  memory                     = "1Gi"
+  max_executions             = 5
+  replica_timeout_in_seconds = 1800
+}

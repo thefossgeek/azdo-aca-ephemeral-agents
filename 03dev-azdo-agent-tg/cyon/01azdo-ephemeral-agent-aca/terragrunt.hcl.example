@@ -24,7 +24,7 @@ include "common" {
 # ============================================================================
 
 terraform {
-  source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-aca"
+  source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-aca-cyon"
 }
 
 # ============================================================================
@@ -97,13 +97,13 @@ inputs = {
   udr_subnet_names = [local.infra_subnet_name]
 
   # ── AzDO Access ───────────────────────────────────────────────────────────
-  ado_project_name = "${local.project}-${local.environment}-azure-infra"
+  ado_project_name = "${local.project}-prod-azure-infra"
   agent_pool_name  = "pool-eph-agent-${local.environment}"
   uami_name        = "id-eph-agent-${local.name_prefix}"
   # Grant the UAMI at minimum AcrPull on the registry hosting the agent image.
   role_assignments = [
     {
-      scope = "provide acr"
+      scope = "xxxxxx"
       role  = "AcrPull"
     }
   ]
@@ -115,9 +115,10 @@ inputs = {
 
   # ── Container App Job (Ephemeral Agent) ───────────────────────────────────
   agent_type   = "alpine"
+  keda_parent  = "caj-spai-dev-alpine-001-ph"
   acr_server   = "xxxxxxx.azurecr.io"
-  agent_image  = "xxxxxxx.azurecr.io/azp-agent/alpine:20260618-7b5b5dee"
-  azdo_org_url = "https://dev.azure.com/xxxxxxxxxxx"
+  agent_image  = "xxxxxxxx.azurecr.io/azp-agent/alpine:20260618-7b5b5dee"
+  azdo_org_url = "https://dev.azure.com/xxxxxxxxxx"
 
   # PAT for KEDA queue polling — set via environment variable, never hardcode.
   # Required scope: Agent Pools (Read)

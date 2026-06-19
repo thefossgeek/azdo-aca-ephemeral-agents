@@ -25,6 +25,7 @@ module "aca_job" {
   memory                     = var.memory
   max_executions             = var.max_executions
   replica_timeout_in_seconds = var.replica_timeout_in_seconds
+  keda_parent                = var.keda_parent
 
   depends_on = [module.aca_env, module.agent_access]
 }

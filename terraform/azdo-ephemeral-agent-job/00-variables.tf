@@ -103,3 +103,9 @@ variable "replica_timeout_in_seconds" {
   type        = number
   default     = 1800
 }
+
+variable "keda_parent" {
+  description = "Name of the manually-created offline placeholder agent in Azure DevOps. KEDA checks its capabilities to filter the queue — only jobs matching this agent's capabilities trigger scaling. Leave empty to disable filtering."
+  type        = string
+  default     = ""
+}

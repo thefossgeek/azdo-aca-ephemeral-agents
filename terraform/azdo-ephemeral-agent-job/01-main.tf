@@ -1,6 +1,14 @@
 locals {
   job_name    = "caj-${var.project}-${var.environment}-${var.agent_type}-${var.instance}"
   keda_secret = "keda-pat"
+  keda_metadata = merge(
+    {
+      organizationURL            = var.azdo_org_url
+      poolID                     = var.azdo_pool_id
+      targetPipelinesQueueLength = "1"
+    },
+    var.keda_parent != "" ? { parent = var.keda_parent } : {}
+  )
 }
 
 resource "azurerm_container_app_job" "this" {
@@ -61,6 +69,10 @@ resource "azurerm_container_app_job" "this" {
         name  = "AZURE_TENANT_ID"
         value = var.tenant_id
       }
+      env {
+        name  = "agent_type"
+        value = var.agent_type
+      }
     }
   }
 
@@ -77,11 +89,7 @@ resource "azurerm_container_app_job" "this" {
         name             = "azp-scaler"
         custom_rule_type = "azure-pipelines"
 
-        metadata = {
-          organizationURL            = var.azdo_org_url
-          poolID                     = var.azdo_pool_id
-          targetPipelinesQueueLength = "1"
-        }
+        metadata = local.keda_metadata
 
         authentication {
           trigger_parameter = "personalAccessToken"
@@ -94,5 +102,21 @@ resource "azurerm_container_app_job" "this" {
   secret {
     name  = local.keda_secret
     value = var.azdo_keda_pat
+  }
+}
+
+# Registers the placeholder agent in Azure DevOps via the bash script.
+# Runs when keda_parent is set. Re-runs if agent name or type changes.
+# Requires AZDO_AGENT_PAT to be exported in the shell before terragrunt apply.
+resource "null_resource" "register_placeholder" {
+  count = var.keda_parent != "" ? 1 : 0
+
+  triggers = {
+    agent_name = var.keda_parent
+    agent_type = var.agent_type
+  }
+
+  provisioner "local-exec" {
+    command = "bash ${path.module}/scripts/register-placeholder-agent.sh '${var.azdo_org_url}' '${var.azdo_pool_id}' '${var.keda_parent}' '${var.agent_type}'"
   }
 }
