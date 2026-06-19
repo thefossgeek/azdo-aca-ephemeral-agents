@@ -99,12 +99,12 @@ inputs = {
   # ── Job-specific ──────────────────────────────────────────────────────────
   project    = local.project
   instance   = local.instance
-  agent_type  = "devops"   # change per job (becomes job name + AZP_AGENT_NAME_PREFIX)
-  keda_parent = "caj-spai-dev-devops-001-ph"
+  agent_type  = "ubuntu24"   # change per job (becomes job name + AZP_AGENT_NAME_PREFIX)
+  keda_parent = "caj-spai-dev-ubuntu24-001-ph"
 
-  acr_server   = "xxxxxxxxx.azurecr.io"
-  agent_image  = "xxxxxxxxxx.azurecr.io/azp-agent:devops"
-  azdo_org_url = "https://dev.azure.com/xxxxxxxx"
+  acr_server   = "xxxxxxxx.azurecr.io"
+  agent_image  = "xxxxxxx.azurecr.io/azp-agent/ubuntu24:20260619-1ed03ed1"
+  azdo_org_url = "https://dev.azure.com/xxxxxxx"
 
   # PAT for KEDA queue polling — set via environment variable, never hardcode.
   # Required scope: Agent Pools (Read)
