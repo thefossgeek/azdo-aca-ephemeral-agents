@@ -35,29 +35,48 @@ cd azdo-aca-ephemeral-agents
 
 ---
 
-## Step 2 — Build & push agent image
+## Step 2 — Build & push agent images
+
+Two agent types are used — `alpine` (lightweight) and `ubuntu24` (Azure PowerShell + Azure CLI). Build and push each one.
 
 ```bash
-export ACR_NAME=<your-acr-name>           # without .azurecr.io
-export IMAGE_REPO=azp-agent/alpine
+export ACR_NAME=<your-acr-name>    # without .azurecr.io
+az acr login --name ${ACR_NAME}
 IMAGE_TAG="$(date +%Y%m%d)-$(git rev-parse --short=8 HEAD)"
+```
 
+### Alpine
+
+```bash
 cd 01azdo-agent-container-images/alpine
 
-./download-agent.sh                       # run once per agent version upgrade
+./download-agent.sh                # run once per agent version upgrade
 
 docker build --no-cache --platform linux/amd64 \
-  -t ${ACR_NAME}.azurecr.io/${IMAGE_REPO}:${IMAGE_TAG} .
+  -t ${ACR_NAME}.azurecr.io/azp-agent/alpine:${IMAGE_TAG} .
 
-az acr login --name ${ACR_NAME}
-
-docker push ${ACR_NAME}.azurecr.io/${IMAGE_REPO}:${IMAGE_TAG}
+docker push ${ACR_NAME}.azurecr.io/azp-agent/alpine:${IMAGE_TAG}
 
 rm agent.tar.gz
 ```
 
-> **Note the full image tag** — e.g. `myacr.azurecr.io/azp-agent/alpine:20260619-abc12345`  
-> Required in Step 5.
+### Ubuntu 24
+
+```bash
+cd 01azdo-agent-container-images/ubuntu24
+
+./download-agent.sh                # run once per agent version upgrade
+
+docker build --no-cache --platform linux/amd64 \
+  -t ${ACR_NAME}.azurecr.io/azp-agent/ubuntu24:${IMAGE_TAG} .
+
+docker push ${ACR_NAME}.azurecr.io/azp-agent/ubuntu24:${IMAGE_TAG}
+
+rm agent.tar.gz
+```
+
+> **Note the full image tags** — e.g. `<acr>.azurecr.io/azp-agent/alpine:20260619-abc12345`  
+> Required in Step 4.
 
 ---
 
@@ -154,7 +173,7 @@ locals {
 }
 ```
 
-### `terragrunt.hcl`
+### Alpine agent stack — `cyon/01azdo-ephemeral-agent-aca/terragrunt.hcl`
 
 ```bash
 cd cyon/01azdo-ephemeral-agent-aca
@@ -168,8 +187,26 @@ role_assignments = [{
   role  = "AcrPull"
 }]
 
-acr_server  = "<ACR-NAME>.azurecr.io"
-agent_image = "<ACR-NAME>.azurecr.io/azp-agent/alpine:<IMAGE-TAG from Step 2>"
+agent_type   = "alpine"
+keda_parent  = "caj-<project>-<env>-alpine-001-ph"   # placeholder agent name — created automatically during apply
+acr_server   = "<ACR-NAME>.azurecr.io"
+agent_image  = "<ACR-NAME>.azurecr.io/azp-agent/alpine:<IMAGE-TAG from Step 2>"
+azdo_org_url = "https://dev.azure.com/<YOUR-ORG>"
+```
+
+### Ubuntu24 agent stack — `cyon/azdo-ephemeral-agent-job/terragrunt.hcl`
+
+```bash
+cd ../azdo-ephemeral-agent-job
+cp terragrunt.hcl.example terragrunt.hcl
+```
+
+Edit `terragrunt.hcl`:
+```hcl
+agent_type   = "ubuntu24"
+keda_parent  = "caj-<project>-<env>-ubuntu24-001-ph"  # placeholder agent name — created automatically during apply
+acr_server   = "<ACR-NAME>.azurecr.io"
+agent_image  = "<ACR-NAME>.azurecr.io/azp-agent/ubuntu24:<IMAGE-TAG from Step 2>"
 azdo_org_url = "https://dev.azure.com/<YOUR-ORG>"
 ```
 
@@ -193,6 +230,7 @@ export TF_VAR_AZDO_KEDA_PAT=<PAT-A>
 ### PAT B — Terraform runner (`AZDO_PERSONAL_ACCESS_TOKEN`)
 
 > Your own user PAT. Your account must be **Project Collection Administrator** in AzDO.
+> This PAT is also used by the placeholder registration script during `terragrunt apply`.
 
 | PAT Scope | Level |
 |---|---|
@@ -210,40 +248,29 @@ export AZDO_ORG_SERVICE_URL=https://dev.azure.com/<YOUR-ORG>
 
 ## Step 6 — Plan & Apply
 
+Apply the alpine stack first (creates shared infra — VNet, ACA environment, agent pool, UAMI), then the ubuntu24 stack (adds a second Container App Job into the same environment).
+
+Each apply also registers a permanent offline placeholder agent in the AzDO pool via the built-in bash script. The placeholder gives KEDA a reference to filter the queue — only jobs matching the agent type trigger scaling.
+
 ```bash
+# Alpine agent + shared infra
 cd azdo-aca-ephemeral-agents/03dev-azdo-agent-tg/cyon/01azdo-ephemeral-agent-aca
-
 terragrunt plan
+terragrunt apply
 
+# Ubuntu24 agent (shares the infra created above)
+cd ../azdo-ephemeral-agent-job
+terragrunt plan
 terragrunt apply
 ```
 
----
-
-## Step 7 — Register placeholder agent
-
-KEDA requires at least one agent registered in the pool to read the queue length.  
-After apply, get the pool ID from the AzDO UI (Agent Pools → your pool → URL contains the ID).
-
-```bash
-export POOL_ID="<POOL-ID>"
-export B64_TOKEN=$(echo -n ":${AZDO_PERSONAL_ACCESS_TOKEN}" | base64)
-
-curl -X POST \
-  -H "Authorization: Basic ${B64_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "placeholder-agent-do-not-delete",
-    "version": "3.225.0",
-    "osDescription": "Linux",
-    "status": "offline",
-    "enabled": true
-  }' \
-  "${AZDO_ORG_SERVICE_URL}/_apis/distributedtask/pools/${POOL_ID}/agents?api-version=7.1"
-```
+> To re-register a placeholder that was manually deleted from the pool:
+> ```bash
+> terragrunt apply -replace=null_resource.register_placeholder
+> ```
 
 ---
 
 ## Done
 
-Run a pipeline that targets the agent pool. KEDA will spin up an ephemeral container for each job and tear it down when complete.
+Run a pipeline that targets the agent pool. Each job with `demands: agent_type -equals alpine` triggers the alpine scaler; `demands: agent_type -equals ubuntu24` triggers the ubuntu24 scaler. KEDA spins up exactly one ephemeral container per queued job and tears it down when complete.
