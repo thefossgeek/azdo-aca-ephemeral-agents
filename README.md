@@ -95,6 +95,107 @@ pool:
 
 ---
 
+## Image Build Pipelines
+
+Pipelines that build and push agent container images run on the ephemeral agents themselves. Authentication uses a dedicated managed identity — no secrets or credentials are stored anywhere.
+
+### How It Works
+
+```
+Push to 01azdo-agent-container-images/alpine/** or ubuntu24/**
+        │
+        ▼
+Ephemeral agent picks up the build job
+        │
+        ├── az login --identity --client-id <ACR_MI_CLIENT_ID>
+        │       └── Uses the acrpush UAMI — separate from the agent's own UAMI
+        │
+        └── az acr build --registry <ACR_NAME> ...
+                └── Build runs in ACR Tasks — no Docker daemon needed on the agent
+```
+
+### Step 1 — Create the pipeline managed identity
+
+All pipeline identities share one resource group:
+
+```bash
+cd 03dev-azdo-agent-tg/managed-identity/01resource-group
+terragrunt apply
+```
+
+Create the acrpush identity — edit `03dev-azdo-agent-tg/managed-identity/02acrpush/terragrunt.hcl` and set the ACR scope:
+
+```hcl
+role_assignments = [
+  {
+    scope = "/subscriptions/<SUB-ID>/resourceGroups/<ACR-RG>/providers/Microsoft.ContainerRegistry/registries/<ACR-NAME>"
+    role  = "Contributor"
+  }
+]
+```
+
+> **Why `Contributor` and not `AcrPush`?**  
+> `az acr build` calls the Azure Resource Manager API to schedule a build task (`scheduleRun` action). `AcrPush` only covers Docker data-plane operations. When the identity lacks ARM read, Azure returns **404 not found** (not 403) — hiding the resource entirely.  
+> `Contributor` scoped to just the ACR resource gives exactly what is needed: ARM read + schedule build + image push.
+
+```bash
+cd 03dev-azdo-agent-tg/managed-identity/02acrpush
+terragrunt apply
+# Note the mi_client_id output — needed for the variable group in Step 3
+```
+
+### Step 2 — Attach the managed identity to agent ACA jobs
+
+The identity must be **attached to the compute** (the ACA job) — simply having a role assignment is not enough. `extra_identity_ids` in each agent stack wires the acrpush UAMI alongside the agent's own UAMI:
+
+```hcl
+# Already declared in cyon/01azdo-ephemeral-agent-aca and byon/01azdo-ephemeral-agent-aca-byon
+extra_identity_ids = [dependency.acrpush_mi.outputs.mi_id]
+```
+
+Apply the agent stacks to attach the identity:
+
+```bash
+# CYON
+cd 03dev-azdo-agent-tg/cyon/01azdo-ephemeral-agent-aca && terragrunt apply
+cd ../azdo-ephemeral-agent-job && terragrunt apply
+
+# BYON
+cd 03dev-azdo-agent-tg/byon/01azdo-ephemeral-agent-aca-byon && terragrunt apply
+cd ../azdo-ephemeral-agent-job && terragrunt apply
+```
+
+Inside the pipeline, the right identity is selected by client ID:
+
+```bash
+az login --identity --client-id "$ACR_MI_CLIENT_ID"
+```
+
+### Step 3 — Create the variable group in Azure DevOps
+
+**Pipelines → Library → + Variable group → name: `acr-build-vars`**
+
+| Variable | Value |
+|---|---|
+| `ACR_NAME` | ACR name without `.azurecr.io` |
+| `ACR_MI_CLIENT_ID` | `mi_client_id` from Step 1 output |
+
+### Step 4 — Register pipelines via Terraform
+
+All pipelines are declared in one file — no portal clicks needed:
+
+```bash
+export AZDO_PERSONAL_ACCESS_TOKEN=<your-pat>
+export AZDO_ORG_SERVICE_URL=https://dev.azure.com/<YOUR-ORG>
+
+cd 03dev-azdo-agent-tg/pipelines
+terragrunt apply
+```
+
+To add a new pipeline, add one entry to the `pipelines` map in `03dev-azdo-agent-tg/pipelines/terragrunt.hcl` and apply again.
+
+---
+
 ## Repository Structure
 
 ```
