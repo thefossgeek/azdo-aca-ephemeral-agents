@@ -26,6 +26,7 @@ module "aca_job" {
   max_executions             = var.max_executions
   replica_timeout_in_seconds = var.replica_timeout_in_seconds
   keda_parent                = var.keda_parent
+  extra_identity_ids         = var.extra_identity_ids
 
   depends_on = [module.aca_env, module.agent_access]
 }

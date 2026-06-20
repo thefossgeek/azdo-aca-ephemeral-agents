@@ -27,6 +27,15 @@ terraform {
   source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-aca-byon"
 }
 
+dependency "acrpush_mi" {
+  config_path = "../../managed-identity/02acrpush"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = {
+    mi_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-mock-acrpush"
+  }
+}
+
 # ============================================================================
 # Locals — derived from root.hcl inputs so names stay consistent with the
 # environment config; no hardcoding of region/env/project strings here.
@@ -94,10 +103,12 @@ inputs = {
   # Grant the UAMI at minimum AcrPull on the registry hosting the agent image.
   role_assignments = [
     {
-      scope = "/subscriptions/xxxx"
+      scope = "xxxxxxx"
       role  = "AcrPull"
     }
   ]
+
+  extra_identity_ids = [dependency.acrpush_mi.outputs.mi_id]
 
   # ── Container App Environment ─────────────────────────────────────────────
   project    = local.project
@@ -107,9 +118,9 @@ inputs = {
   # ── Container App Job (Ephemeral Agent) ───────────────────────────────────
   agent_type   = "alpine"
   keda_parent  = "caj-spai-dev-alpine-001-ph"
-  acr_server   = "xxxxx.azurecr.io"
-  agent_image  = "xxxxx.azurecr.io/azp-agent/alpine:20260618-7b5b5dee"
-  azdo_org_url = "https://dev.azure.com/xxxxxxx"
+  acr_server   = "xxxxxx.azurecr.io"
+  agent_image  = "xxxxxx.azurecr.io/azp-agent/alpine:20260618-7b5b5dee"
+  azdo_org_url = "https://dev.azure.com/xxxxxx"
 
   # PAT for KEDA queue polling — set via environment variable, never hardcode.
   # Required scope: Agent Pools (Read)

@@ -1,0 +1,26 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - 01azdo-agent-container-images/ubuntu24/**
+    exclude:
+      - '**/*.md'
+
+pool:
+  name: pool-eph-agent-dev
+  demands: agent_type -equals ubuntu24
+
+variables:
+  - group: acr-build-vars   # ACR_NAME, ACR_MI_CLIENT_ID
+
+jobs:
+  - job: BuildUbuntu24
+    displayName: Build and push ubuntu24
+    steps:
+      - template: templates/steps/acr-build-push.yml
+        parameters:
+          imageName: ubuntu24
+          acrName: $(ACR_NAME)
+          acrMiClientId: $(ACR_MI_CLIENT_ID)

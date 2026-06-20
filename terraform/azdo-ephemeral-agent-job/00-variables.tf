@@ -54,6 +54,12 @@ variable "uami_client_id" {
   type        = string
 }
 
+variable "extra_identity_ids" {
+  description = "Additional user-assigned managed identity resource IDs to attach to the ACA job. Use when pipeline steps need a separate identity (e.g. acrpush-uami). Reference by client ID inside the pipeline with: az login --identity --client-id <client-id>"
+  type        = list(string)
+  default     = []
+}
+
 variable "azdo_org_url" {
   description = "Azure DevOps organization URL."
   type        = string

@@ -50,6 +50,15 @@ terraform {
 # All infra outputs (CAE, UAMI, pool, RG) are read from that state file.
 # ============================================================================
 
+dependency "acrpush_mi" {
+  config_path = "../../managed-identity/02acrpush"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = {
+    mi_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-mock-acrpush"
+  }
+}
+
 dependency "infra" {
   config_path = "../01azdo-ephemeral-agent-aca"
 
@@ -93,6 +102,7 @@ inputs = {
   cae_id              = dependency.infra.outputs.cae_id
   uami_id             = dependency.infra.outputs.uami_id
   uami_client_id      = dependency.infra.outputs.uami_client_id
+  extra_identity_ids  = [dependency.acrpush_mi.outputs.mi_id]
   azdo_pool_name      = dependency.infra.outputs.agent_pool_name
   azdo_pool_id        = tostring(dependency.infra.outputs.agent_pool_id)
 
@@ -102,9 +112,9 @@ inputs = {
   agent_type  = "ubuntu24"   # change per job (becomes job name + AZP_AGENT_NAME_PREFIX)
   keda_parent = "caj-spai-dev-ubuntu24-001-ph"
 
-  acr_server   = "xxxxxxxx.azurecr.io"
-  agent_image  = "xxxxxxx.azurecr.io/azp-agent/ubuntu24:20260619-1ed03ed1"
-  azdo_org_url = "https://dev.azure.com/xxxxxxx"
+  acr_server   = "xxxxxxx.azurecr.io"
+  agent_image  = "xxxxxx.azurecr.io/azp-agent/ubuntu24:20260619-1ed03ed1"
+  azdo_org_url = "https://dev.azure.com/xxxx"
 
   # PAT for KEDA queue polling — set via environment variable, never hardcode.
   # Required scope: Agent Pools (Read)

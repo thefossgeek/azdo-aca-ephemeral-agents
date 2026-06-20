@@ -1,3 +1,7 @@
+# ============================================================================
+# Includes
+# ============================================================================
+
 include "root" {
   path           = find_in_parent_folders("root.hcl")
   merge_strategy = "deep"
@@ -10,14 +14,19 @@ include "common" {
   expose         = true
 }
 
+# ============================================================================
+# Terraform Source
+# Points directly at the single-job module — no VNet, RG, or ACA env here.
+# ============================================================================
+
 # Override common.hcl's globals.tf to exclude location/environment/tenant_id —
 # those are already declared in the module's own 00-variables.tf so that the
 # module can also be called as a child module by azdo-ephemeral-agent-aca-*.
 generate "globals" {
-  path              = "globals.tf"
-  if_exists         = "overwrite"
+  path      = "globals.tf"
+  if_exists = "overwrite"
   disable_signature = true
-  contents          = <<EOF
+  contents  = <<EOF
 variable "subscription_id" {
   type = string
 }
@@ -36,9 +45,24 @@ terraform {
   source = "${get_repo_root()}/terraform//azdo-ephemeral-agent-job"
 }
 
-dependency "infra" {
-  config_path = "../azdo-ephemeral-agent-aca-byon"
+# ============================================================================
+# Dependency — shared infrastructure deployed by azdo-ephemeral-agent-aca-byon
+# All infra outputs (CAE, UAMI, pool, RG) are read from that state file.
+# ============================================================================
 
+dependency "acrpush_mi" {
+  config_path = "../../managed-identity/02acrpush"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs = {
+    mi_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mock/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-mock-acrpush"
+  }
+}
+
+dependency "infra" {
+  config_path = "../01azdo-ephemeral-agent-aca-byon"
+
+  # Mock outputs allow `terragrunt plan` to work before the infra is applied.
   mock_outputs_allowed_terraform_commands = ["validate", "plan"]
   mock_outputs = {
     resource_group_name = "rg-mock"
@@ -50,12 +74,26 @@ dependency "infra" {
   }
 }
 
+# ============================================================================
+# Locals
+# ============================================================================
+
 locals {
   location_code = include.root.inputs.location_code
   project       = include.root.inputs.project
   environment   = include.root.inputs.environment
   instance      = "001"
 }
+
+# ============================================================================
+# Inputs
+#
+# location, environment, project, location_code, tenant_id, tags,
+# subscription_id are inherited from root.hcl via the include above.
+#
+# Shared infra (RG, CAE, UAMI, pool) comes from the dependency outputs.
+# Only job-specific values are declared here.
+# ============================================================================
 
 inputs = {
 
@@ -64,19 +102,23 @@ inputs = {
   cae_id              = dependency.infra.outputs.cae_id
   uami_id             = dependency.infra.outputs.uami_id
   uami_client_id      = dependency.infra.outputs.uami_client_id
+  extra_identity_ids  = [dependency.acrpush_mi.outputs.mi_id]
   azdo_pool_name      = dependency.infra.outputs.agent_pool_name
   azdo_pool_id        = tostring(dependency.infra.outputs.agent_pool_id)
 
   # ── Job-specific ──────────────────────────────────────────────────────────
-  project     = local.project
-  instance    = local.instance
+  project    = local.project
+  instance   = local.instance
   agent_type  = "ubuntu24"   # change per job (becomes job name + AZP_AGENT_NAME_PREFIX)
-  keda_parent = "caj-<project>-<env>-ubuntu24-001-ph"
+  keda_parent = "caj-spai-dev-ubuntu24-001-ph"
 
-  acr_server   = "xxxxxxxxx.azurecr.io"
-  agent_image  = "xxxxxxxxx.azurecr.io/azp-agent/ubuntu24:<IMAGE-TAG>"
-  azdo_org_url = "https://dev.azure.com/xxxxxxxxxx"
+  acr_server   = "xxxxx.azurecr.io"
+  agent_image  = "xxxxxx.azurecr.io/azp-agent/ubuntu24:20260619-1ed03ed1"
+  azdo_org_url = "https://dev.azure.com/xxxxx"
 
+  # PAT for KEDA queue polling — set via environment variable, never hardcode.
+  # Required scope: Agent Pools (Read)
+  # Usage: export TF_VAR_AZDO_KEDA_PAT=<your-pat>
   azdo_keda_pat = get_env("TF_VAR_AZDO_KEDA_PAT")
 
   cpu                        = "0.5"

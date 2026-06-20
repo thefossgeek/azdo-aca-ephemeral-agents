@@ -1,0 +1,27 @@
+include "root" {
+  path           = find_in_parent_folders("root.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+include "common" {
+  path           = find_in_parent_folders("common-lean.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+terraform {
+  source = "${get_repo_root()}/terraform//resource-group"
+}
+
+locals {
+  location_code = include.root.inputs.location_code
+  project       = include.root.inputs.project
+  environment   = include.root.inputs.environment
+  instance      = "001"
+}
+
+inputs = {
+  resource_group_name = "rg-${local.location_code}-${local.project}-${local.environment}-pipeline-mi-${local.instance}"
+  enable_lock         = false
+}

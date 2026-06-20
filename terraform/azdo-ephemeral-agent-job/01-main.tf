@@ -22,7 +22,7 @@ resource "azurerm_container_app_job" "this" {
 
   identity {
     type         = "UserAssigned"
-    identity_ids = [var.uami_id]
+    identity_ids = concat([var.uami_id], var.extra_identity_ids)
   }
 
   registry {

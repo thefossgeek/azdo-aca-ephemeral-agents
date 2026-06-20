@@ -1,0 +1,42 @@
+include "root" {
+  path           = find_in_parent_folders("root.hcl")
+  merge_strategy = "deep"
+  expose         = true
+}
+
+include "common" {
+  path           = find_in_parent_folders("common-azdo.hcl")
+  merge_strategy = "deep"
+}
+
+terraform {
+  source = "${get_repo_root()}/terraform//azdo-pipelines"
+}
+
+# ---------------------------------------------------------------------------
+# All Azure DevOps pipelines for this project are registered here.
+# To add a new pipeline: add an entry to the pipelines map below.
+# Run `terragrunt apply` to register it — no portal clicks needed.
+# ---------------------------------------------------------------------------
+
+inputs = {
+  project_name    = "xxxx-azure-infra"
+  repository_name = "xxxx-azure-infra"
+  default_branch  = "refs/heads/main"
+  folder          = "\\"
+
+  pipelines = {
+
+    # -------------------------------------------------------------------------
+    # Container image builds
+    # -------------------------------------------------------------------------
+    "build-alpine" = {
+      yml_path        = ".pipelines/build-alpine.yml"
+      variable_groups = ["acr-build-vars"]
+    }
+    "build-ubuntu24" = {
+      yml_path        = ".pipelines/build-ubuntu24.yml"
+      variable_groups = ["acr-build-vars"]
+    }
+  }
+}

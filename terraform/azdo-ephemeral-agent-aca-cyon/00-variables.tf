@@ -134,6 +134,12 @@ variable "role_assignments" {
   default = []
 }
 
+variable "extra_identity_ids" {
+  description = "Additional user-assigned managed identity resource IDs to attach to the ACA job. Use for task-specific identities (e.g. acrpush-uami). Reference by client ID in pipelines: az login --identity --client-id <client-id>"
+  type        = list(string)
+  default     = []
+}
+
 # ============================================================================
 # Container App Environment
 # ============================================================================
