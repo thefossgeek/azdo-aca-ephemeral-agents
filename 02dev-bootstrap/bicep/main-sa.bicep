@@ -33,11 +33,11 @@ resource rg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: rgName
   location: deployment().location
   tags: {
-    owner: 'qdata'
+    owner: 'mohan'
     department: 'devops'
     managedby: 'bicep'
-    repository: 'qdata-azure-bootstrap'
-    product: 'q'
+    repository: 'azdo-aca-ephemeral-agents'
+    product: 'spai'
   }
 }
 
