@@ -31,11 +31,11 @@ resource account 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: saName
   location: resourceGroup().location
   tags: {
-    owner: 'qdata'
+    owner: 'mohan'
     department: 'devops'
     managedby: 'bicep'
-    repository: 'qdata-azure-bootstrap'
-    product: 'q'
+    repository: 'azdo-aca-ephemeral-agents'
+    product: 'spai'
   }
   sku: {
     name: skuName
